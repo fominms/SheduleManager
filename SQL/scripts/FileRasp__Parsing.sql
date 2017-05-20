@@ -1,5 +1,5 @@
 -- {Путь к файлу} 
-declare @FilePath varchar(max) = '\spd-tTemptestfile.xlsx' 
+declare @FilePath varchar(max) = 'D:\_sources\SheduleManager\Files\it-1k-16_17-vesna-novoe.xlsx' 
 declare @FileData varbinary(max) = null
 
 -- {Если запускается из Microsoft SQL Server Management Studio, то выводим сообщения} 
@@ -30,29 +30,38 @@ insert into @t_Lesson_Number (Number, TimeBegin, TimeEnd) values
 insert into @t_Lesson_Type (Name, Symbol) values ('Лекция', 'лк'), ('Практика','пр'), ('Лабораторная','лаб')
 
 -- {Получим имя файла} 
-declare @FileName varchar(128) = right(@FilePath, charindex('', reverse(@FilePath))-1)
+declare @FileName varchar(1024) = right(@FilePath, charindex('\', reverse(@FilePath))-1)
 
 -- {Запишем файл в таблицу} 
 insert into @t_Files (Name, Date, FileData) select @FileName, getdate(), @FileData 
 declare @Files_ID int = scope_identity()
 
 -- {Заполнение временной таблицы из файла} 
-if object_id('tempdb..##rasp') is not null drop table ##rasp 
-exec('select * into ##rasp from openrowset(''Microsoft.ACE.OLEDB.12.0'', ''Excel 12.0; HDR=No; IMEX=1; Database='+@FilePath+''', [Лист1$]) tt')
+if object_id('tempdb..#rasp') is not null drop table #rasp
+
+-- {Добавим файл Excel к связному серверу}
+if (exists(select 1 from sys.servers where name = 'XlsLnkSrv')) exec sp_dropserver @server = 'XlsLnkSrv', @droplogins = 'droplogins'
+exec sp_addlinkedserver @server = 'XlsLnkSrv', @srvproduct = 'ACE 12.0', @provider = 'Microsoft.ACE.OLEDB.12.0', @datasrc = @FilePath, @provstr = 'Excel 12.0; HDR=No; IMEX=1;'
+
+select * into #rasp from openquery (XlsLnkSrv, 'select * from [Лист1$]')
+
+
+
+--exec('select * into #rasp from openrowset(''Microsoft.ACE.OLEDB.12.0'', ''Excel 12.0; HDR=No; IMEX=1; Database='+@FilePath+''', [Лист1$]) tt')
 
 -- {Узнаем количество колонок во временной таблице} 
-declare @_countColumns int = (select count(*) from tempdb.sys.columns where object_id = object_id('tempdb..##rasp')) 
+declare @_countColumns int = (select count(*) from tempdb.sys.columns where object_id = object_id('tempdb..#rasp')) 
 if (@_debug = 1) raiserror('# Количество колонок во временной таблице: %i', 0, 1, @_countColumns)
 
 -- {Добавим поле id} 
-alter table ##rasp add id int identity(1,1)
+alter table #rasp add id int identity(1,1)
 
 -- {Колонки временной таблицы} 
---select * from tempdb.sys.columns where object_id = object_id('tempdb..##rasp')
+--select * from tempdb.sys.columns where object_id = object_id('tempdb..#rasp')
 
 -- {Получим строку с описанием института, курса и учебного года} 
-declare @_information varchar(max) = (select top 1 F2 from ##rasp) 
-set @_information = replace(replace(replace(@_information, char(10), ''), char(13), ''), ' ', '') 
+declare @_information varchar(max) = (select top 1 F2 from #rasp) 
+set @_information = replace(replace(replace(@_information, char(10), ''), char(13), ''), '  ', '') 
 if (@_debug = 1) raiserror('# @_information = %s', 1, 0, @_information)
 
 -- {Разберем полученную строку} 
@@ -98,8 +107,8 @@ insert into @t_Shedules (Files_ID, Accademic_Years_ID, Institutes_ID, Semesters_
 declare @Shedules_ID int = scope_identity()
 
 -- {Удалим ненужные поля} 
-delete from ##rasp where id = 1 
-delete from ##rasp where id >= (select id from ##rasp where upper(F3) like upper('%Начальник%'))
+delete from #rasp where id = 1 
+delete from #rasp where id >= (select id from #rasp where upper(F3) like upper('%Начальник%'))
 
 if object_id('tempdb..#t_rasp') is not null drop table #t_rasp
 
@@ -111,8 +120,8 @@ declare @i int = 2
 
 while @i <= @_countColumns 
 begin
-	declare @_columnName varchar(8) = (select name from tempdb.sys.columns where object_id = object_id('tempdb..##rasp') and column_id = @i) 
-	declare @_sql nvarchar(max) = N'set @_columnValue = (select ' + @_columnName + ' from ##rasp where id = 3)' 
+	declare @_columnName varchar(8) = (select name from tempdb.sys.columns where object_id = object_id('tempdb..#rasp') and column_id = @i) 
+	declare @_sql nvarchar(max) = N'set @_columnValue = (select ' + @_columnName + ' from #rasp where id = 3)' 
 	declare @_columnValue varchar(max) 
 	
 	exec sp_executesql @_sql, N'@_columnValue varchar(max) out', @_columnValue = @_columnValue out 
@@ -120,16 +129,16 @@ begin
 	begin
 		-- {Узнаем номер группы} 
 		declare @_groupNumber varchar(max) 
-		set @_sql = N'set @_groupNumber = (select ' + @_columnName + ' from ##rasp where id = 2)' 
+		set @_sql = N'set @_groupNumber = (select ' + @_columnName + ' from #rasp where id = 2)' 
 		exec sp_executesql @_sql, N'@_groupNumber varchar(max) out', @_groupNumber = @_groupNumber out 	
 
 		set @_sql = N' insert into #t_rasp (GroupNumber, Day, NumberLesson, DateBegin, DateEnd, Weekend, Name, Type, Teacher, Cabinet, old_id)
-			select ''' + @_groupNumber + ''', F1, F2, F3, F4, F5, F' + cast(@i as varchar) + ', F' + cast(@i+1 as varchar) + ', F' + cast(@i+2 as varchar) + ', F' + cast(@i+3 as varchar) + ', id from ##rasp where id >= 4' 
+			select ''' + @_groupNumber + ''', F1, F2, F3, F4, F5, F' + cast(@i as varchar) + ', F' + cast(@i+1 as varchar) + ', F' + cast(@i+2 as varchar) + ', F' + cast(@i+3 as varchar) + ', id from #rasp where id >= 4' 
 		exec sp_executesql @_sql
 	end 
 	set @i += 1
 end 
-if object_id('tempdb..##rasp') is not null drop table ##rasp
+if object_id('tempdb..#rasp') is not null drop table #rasp
 
 -- {Почистим таблицу от ненужных данных} 
 update #t_rasp set Name = null where Name in ('День', 'самостоятельных', 'занятий')
@@ -211,4 +220,4 @@ insert into @t_Shedules_Detail (Shedules_ID, Groups_ID, Days_ID, Weeks_ID, Lesso
 
 delete from #t_rasp where id = @id
 
-end if object_id('tempdb..##rasp') is not null drop table #t_rasp select * from @t_Shedules_Detail
+end if object_id('tempdb..#rasp') is not null drop table #t_rasp select * from @t_Shedules_Detail
