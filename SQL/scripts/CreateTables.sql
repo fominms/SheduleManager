@@ -28,7 +28,7 @@ go
 create table dbo.t_Academic_Years (Academic_Years_ID int identity(1,1), Year_Begin int, Year_End int
 	, constraint [PK_t_Academic_Years] primary key clustered (Academic_Years_ID asc) with (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]) ON [PRIMARY] 
 go
-create table dbo.t_Shedules (Shedules_ID int identity(1,1), Files_ID int, Accademic_Years_ID int, Institutes_ID int, Semesters_ID int
+create table dbo.t_Shedules (Shedules_ID int identity(1,1), Files_ID int, Accademic_Years_ID int, Institutes_ID int, Semesters_ID int, Is_Actual bit
 	, constraint [PK_t_Shedules] primary key clustered (Shedules_ID asc) with (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]) ON [PRIMARY] 
 go
 create table dbo.t_Institutes (Institutes_ID int identity(1,1), Name varchar(1024)
