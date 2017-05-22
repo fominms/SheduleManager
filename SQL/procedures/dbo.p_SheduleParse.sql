@@ -1,4 +1,4 @@
-create procedure dbo.p_SheduleParse	@FilePath varchar(max), @FileData varbinary(max) = null
+create procedure dbo.p_SheduleParse	@FilePath varchar(max)
 as
 begin
 	-- {Если запускается из Microsoft SQL Server Management Studio, то выводим сообщения} 
@@ -8,8 +8,13 @@ begin
 		-- {Получим имя файла} 
 		declare @FileName varchar(1024) = right(@FilePath, charindex('\', reverse(@FilePath))-1)
 
+		-- {Загрузим файл}
+		declare @FileBinary varbinary(max), @ErrorMessage varchar(max)
+		exec dbo.clr_LoadFile @FileName = @FilePath, @FileBinary = @FileBinary out, @ErrorMessage = @ErrorMessage out
+		if ((len(@ErrorMessage) > 0) or (datalength(@FileBinary) = 0)) raiserror('Ошибка при загрузке файла расписания: %s', 16, 1, @ErrorMessage)
+
 		-- {Запишем файл в таблицу} 
-		insert into dbo.t_Files (Name, Date, FileData) select @FileName, getdate(), @FileData 
+		insert into dbo.t_Files (Name, Date, FileData) select @FileName, getdate(), @FileBinary 
 		declare @Files_ID int = scope_identity()
 
 		-- {Заполнение временной таблицы из файла} 
@@ -194,7 +199,7 @@ begin
 	end try
 	begin catch
 		if (@@trancount > 0) rollback
-		declare @ErrorMessage varchar(max) = error_message() 
+		set @ErrorMessage = error_message() 
 		raiserror('%s', 16, 1, @ErrorMessage)
 		return -1
 	end catch
