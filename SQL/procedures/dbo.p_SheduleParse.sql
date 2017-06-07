@@ -1,4 +1,14 @@
-create procedure dbo.p_SheduleParse	@FilePath varchar(max)
+USE [DataBase_Shedule]
+GO
+
+/****** Object:  StoredProcedure [dbo].[p_SheduleParse]    Script Date: 07.06.2017 20:00:52 ******/
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE procedure [dbo].[p_SheduleParse]	@FilePath varchar(max), @FileBinary varbinary(max) = null
 as
 begin
 	-- {Если запускается из Microsoft SQL Server Management Studio, то выводим сообщения} 
@@ -9,9 +19,10 @@ begin
 		declare @FileName varchar(1024) = right(@FilePath, charindex('\', reverse(@FilePath))-1)
 
 		-- {Загрузим файл}
-		declare @FileBinary varbinary(max), @ErrorMessage varchar(max)
-		exec dbo.clr_LoadFile @FileName = @FilePath, @FileBinary = @FileBinary out, @ErrorMessage = @ErrorMessage out
-		if ((len(@ErrorMessage) > 0) or (datalength(@FileBinary) = 0)) raiserror('Ошибка при загрузке файла расписания: %s', 16, 1, @ErrorMessage)
+		declare @ErrorMessage varchar(max)
+		--declare @FileBinary varbinary(max), 
+		--exec dbo.clr_LoadFile @FileName = @FilePath, @FileBinary = @FileBinary out, @ErrorMessage = @ErrorMessage out
+		--if ((len(@ErrorMessage) > 0) or (datalength(@FileBinary) = 0)) raiserror('Ошибка при загрузке файла расписания: %s', 16, 1, @ErrorMessage)
 
 		-- {Запишем файл в таблицу} 
 		insert into dbo.t_Files (Name, Date, FileData) select @FileName, getdate(), @FileBinary 
@@ -78,7 +89,7 @@ begin
 			set @Academic_Years_ID = (select Academic_Years_ID from dbo.t_Academic_Years where Year_Begin = @_yearBegin and Year_End = @_yearEnd)
 		end
 
-		insert into dbo.t_Shedules (Files_ID, Accademic_Years_ID, Institutes_ID, Semesters_ID) select @Files_ID, @Academic_Years_ID, @Institutes_ID, @Semestrs_ID 
+		insert into dbo.t_Shedules (Files_ID, Accademic_Years_ID, Institutes_ID, Semesters_ID, Is_Actual) select @Files_ID, @Academic_Years_ID, @Institutes_ID, @Semestrs_ID, 0
 		declare @Shedules_ID int = scope_identity()
 
 		-- {Удалим ненужные поля} 
@@ -204,3 +215,5 @@ begin
 		return -1
 	end catch
 end
+GO
+
