@@ -1,14 +1,14 @@
 USE [DataBase_Shedule]
 GO
 
-/****** Object:  StoredProcedure [dbo].[p_SheduleParse]    Script Date: 07.06.2017 20:00:52 ******/
+/****** Object:  StoredProcedure [dbo].[p_SheduleParse]    Script Date: 11.06.2017 22:52:35 ******/
 SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
 GO
 
-CREATE procedure [dbo].[p_SheduleParse]	@FilePath varchar(max), @FileBinary varbinary(max) = null
+ALTER procedure [dbo].[p_SheduleParse]	@FilePath varchar(max), @FileBinary varbinary(max) = null
 as
 begin
 	-- {Если запускается из Microsoft SQL Server Management Studio, то выводим сообщения} 
@@ -35,7 +35,7 @@ begin
 		if (exists(select 1 from sys.servers where name = 'XlsLnkSrv')) exec sp_dropserver @server = 'XlsLnkSrv', @droplogins = 'droplogins'
 		exec sp_addlinkedserver @server = 'XlsLnkSrv', @srvproduct = 'ACE 12.0', @provider = 'Microsoft.ACE.OLEDB.12.0', @datasrc = @FilePath, @provstr = 'Excel 12.0; HDR=No; IMEX=1;'
 
-		select * into #rasp from openquery (XlsLnkSrv, 'select * from [Лист1$]')
+		--select * into #rasp from openquery (XlsLnkSrv, 'select * from [Лист1$]')
 		--exec('select * into #rasp from openrowset(''Microsoft.ACE.OLEDB.12.0'', ''Excel 12.0; HDR=No; IMEX=1; Database='+@FilePath+''', [Лист1$]) tt')
 
 		-- {Узнаем количество колонок во временной таблице} 
@@ -175,7 +175,15 @@ begin
 			set @Weeks_ID = (select Weeks_ID from dbo.t_Weeks where Symbol = @Weekend) 
 			set @Lesson_Type_ID = (select Lesson_Type_ID from dbo.t_Lesson_Type where upper(Symbol) = upper(@Type))
 
-			if ((@SubjectName is not null) and (not(exists(select top 1 * from dbo.t_Subjects where upper(Name) = upper(@SubjectName))))) 
+			-- {Проверим, есть ли номера недель}
+			declare @t_Weeks_Numbers table(SubjectName varchar(max), Number int)
+			insert into @t_Weeks_Numbers (SubjectName, Number) 
+			select SubjectName, Number from dbo.f_SubjectName_Parse(@SubjectName)
+			if (exists(select top 1 * from @t_Weeks_Numbers))			
+				set @SubjectName = (select top 1 SubjectName from @t_Weeks_Numbers)
+
+			-- {Проверка названия предмета в справочнике}
+			if ((@SubjectName is not null) and (not(exists(select top 1 * from dbo.t_Subjects where upper(Name) = upper(@SubjectName) or upper(Name) like @SubjectName + '%')))) 
 			begin
 				insert into dbo.t_Subjects (Name) select @SubjectName set @Subject_ID = scope_identity()
 			end 
@@ -203,6 +211,9 @@ begin
 			end
 
 			insert into dbo.t_Shedules_Detail (Shedules_ID, Groups_ID, Days_ID, Weeks_ID, Lesson_Number_ID, Subject_ID, Lesson_Type_ID, Teachers_ID, ClassRooms_ID) select @Shedules_ID, @Groups_ID, @Days_ID, @Weeks_ID, @Lesson_Number_ID, @Subject_ID, @Lesson_Type_ID, @Teachers_ID, @ClassRooms_ID
+			declare @Shedules_Details_ID int = scope_identity()
+			insert dbo.t_Weeks_Numbers (Shedules_Detail_ID, Number)
+			select @Shedules_Details_ID, w.Number from @t_Weeks_Numbers as w
 
 			delete from #t_rasp where id = @id
 		end if object_id('tempdb..#rasp') is not null drop table #t_rasp select * from dbo.t_Shedules_Detail
