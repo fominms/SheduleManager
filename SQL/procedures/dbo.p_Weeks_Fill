@@ -1,0 +1,32 @@
+create procedure dbo.p_Weeks_Fill @Academic_Years_ID int, @DateBegin date, @DateEnd date
+as
+begin
+	set nocount on
+	begin try
+		begin tran
+		-- {Определим таблицу (временно)}		
+		declare @t_Weeks table (Weeks_ID int identity(1,1), Academic_Years_ID int, Day_Begin date, Day_End date, Weeks_Type_ID int)
+		-- {Сформируем список недель в заданном диапазоне}
+		declare @date date = @DateBegin
+		while @date < @DateEnd begin
+			if (datediff(week, @DateBegin, @date) = 1)
+			begin
+				insert into @t_Weeks (Day_Begin, Day_End) select @DateBegin, @date 
+				set @DateBegin = dateadd(day, 1, @date)
+			end
+			set @date = dateadd(day, 1, @date)	
+		end
+		-- {Если последним днем было указано не воскресенье, то добавим последнюю неполную неделю}
+		if (@date <> @DateBegin) insert into @t_Weeks (Day_Begin, Day_End) select @DateBegin, @date
+		-- {Проставим тип недели нечетная/четная}
+		update @t_Weeks set Weeks_Type_ID = Weeks_ID % 2 where Weeks_ID is not null
+		if (@@trancount > 0) commit
+		return 1
+	end try
+	begin catch
+		declare @errorMessage varchar(max) = error_message()
+		if (@@trancount > 0) rollback
+		raiserror('Ошибка при формировании списка недель: %s', 16, 1, @errorMessage) with nowait
+		return -1
+	end catch
+end 
