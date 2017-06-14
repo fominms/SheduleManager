@@ -8,10 +8,10 @@ GO
 SET QUOTED_IDENTIFIER ON
 GO
 
-create procedure [dbo].[p_Weeks]
+create procedure [dbo].[p_Weeks_Type]
 as
 begin
-	select w.Weeks_ID, w.Name, w.Symbol from dbo.t_Weeks as w
+	select wt.Weeks_ID, wt.Name, wt.Symbol from dbo.t_Weeks_Type as wt
 end
 GO
 
